@@ -128,7 +128,7 @@ def _preprocess_for_detection(image_bgr: np.ndarray) -> np.ndarray:
       1. CLAHE on the L channel (YCrCb) to fix uneven / dim lighting.
       2. Mild sharpening to recover soft edges from camera blur.
 
-    Operates in-place on a copy — original is not modified.
+    Operates on a copy — original image is not modified.
     """
     img = image_bgr.copy()
 
@@ -136,14 +136,26 @@ def _preprocess_for_detection(image_bgr: np.ndarray) -> np.ndarray:
     ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
     y, cr, cb = cv2.split(ycrcb)
 
-    clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+    clahe = cv2.createCLAHE(
+        clipLimit=2.5,
+        tileGridSize=(8, 8)
+    )
     y = clahe.apply(y)
 
-    img = cv2.cvtColor(cv2.merge([y, cr, cb]), cv2.COLOR_YCrCb2BGR)
+    img = cv2.cvtColor(
+        cv2.merge([y, cr, cb]),
+        cv2.COLOR_YCrCb2BGR
+    )
 
-    # ── Unsharp mask (mild sharpening) ────────────────────────────────────────
-    blur   = cv2.GaussianBlur(img, (0, 0), sigmaX=2.0)
-    img    = cv2.addWeighted(img, 1.4, blur, -0.4, 0)
+    # ── Mild unsharp masking ──────────────────────────────────────────────────
+    blur = cv2.GaussianBlur(img, (0, 0), sigmaX=2.0)
+    img = cv2.addWeighted(
+        img,
+        1.4,
+        blur,
+        -0.4,
+        0
+    )
 
     return img
 
