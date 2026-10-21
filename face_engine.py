@@ -257,6 +257,10 @@ def _tile_and_detect(
               split into overlapping horizontal tiles and run again.
               Catches small faces in wide classroom panoramas.
 
+    Pass 3 — If the image is tall enough (height > 1.5× width),
+              split into overlapping vertical tiles and run again.
+              Catches small faces in tall classroom images.
+
     All detections are merged and de-duplicated with NMS.
     """
     H, W = image_bgr.shape[:2]
@@ -264,19 +268,32 @@ def _tile_and_detect(
 
     # ── Pass 1: full image ────────────────────────────────────────────────────
     det_size = _best_det_size(H, W)
-    scale    = min(det_size[0] / H, det_size[1] / W)
-    resized  = cv2.resize(image_bgr, (int(W * scale), int(H * scale)))
+    scale = min(det_size[0] / H, det_size[1] / W)
+    resized = cv2.resize(
+        image_bgr,
+        (int(W * scale), int(H * scale))
+    )
 
-    dets = _detect_on_patch(app, resized, det_size, min_score, 0, 0, scale)
+    dets = _detect_on_patch(
+        app, resized, det_size, min_score, 0, 0, scale
+    )
     all_dets.extend(dets)
-    logger.debug(f"Pass 1 (full image @{det_size}): {len(dets)} raw faces")
+
+    logger.debug(
+        f"Pass 1 (full image @{det_size}): {len(dets)} raw faces"
+    )
 
     # ── Pass 2: horizontal tiling for wide images ─────────────────────────────
     if W > 1.5 * H and W > 1000:
-        n_tiles  = max(2, round(W / H))
-        step     = W / n_tiles
-        overlap  = int(step * TILE_OVERLAP)
-        tile_w   = int(step) + overlap
+        n_tiles = max(2, round(W / H))
+        step = W / n_tiles
+        overlap = int(step * TILE_OVERLAP)
+        tile_w = int(step) + overlap
+
+        logger.info(
+            f"Wide image detected ({W}x{H}); "
+            f"processing {n_tiles} horizontal tiles"
+        )
 
         for t in range(n_tiles):
             tx1 = max(0, int(t * step) - overlap // 2)
@@ -284,22 +301,42 @@ def _tile_and_detect(
             tile = image_bgr[:, tx1:tx2]
 
             t_det_size = _best_det_size(H, tx2 - tx1)
-            t_scale    = min(t_det_size[0] / H, t_det_size[1] / (tx2 - tx1))
-            t_resized  = cv2.resize(tile, (int((tx2-tx1)*t_scale), int(H*t_scale)))
+            t_scale = min(
+                t_det_size[0] / H,
+                t_det_size[1] / (tx2 - tx1)
+            )
+            t_resized = cv2.resize(
+                tile,
+                (int((tx2 - tx1) * t_scale), int(H * t_scale))
+            )
 
             tile_dets = _detect_on_patch(
-                app, t_resized, t_det_size, min_score,
-                offset_x=tx1, offset_y=0, scale=t_scale
+                app,
+                t_resized,
+                t_det_size,
+                min_score,
+                offset_x=tx1,
+                offset_y=0,
+                scale=t_scale
             )
+
             all_dets.extend(tile_dets)
-            logger.debug(f"Pass 2 tile {t}: {len(tile_dets)} raw faces")
+
+            logger.debug(
+                f"Pass 2 tile {t}: {len(tile_dets)} raw faces"
+            )
 
     # ── Pass 3: vertical tiling for tall images ───────────────────────────────
     if H > 1.5 * W and H > 1000:
-        n_tiles  = max(2, round(H / W))
-        step     = H / n_tiles
-        overlap  = int(step * TILE_OVERLAP)
-        tile_h   = int(step) + overlap
+        n_tiles = max(2, round(H / W))
+        step = H / n_tiles
+        overlap = int(step * TILE_OVERLAP)
+        tile_h = int(step) + overlap
+
+        logger.info(
+            f"Tall image detected ({W}x{H}); "
+            f"processing {n_tiles} vertical tiles"
+        )
 
         for t in range(n_tiles):
             ty1 = max(0, int(t * step) - overlap // 2)
@@ -307,18 +344,38 @@ def _tile_and_detect(
             tile = image_bgr[ty1:ty2, :]
 
             t_det_size = _best_det_size(ty2 - ty1, W)
-            t_scale    = min(t_det_size[0] / (ty2-ty1), t_det_size[1] / W)
-            t_resized  = cv2.resize(tile, (int(W*t_scale), int((ty2-ty1)*t_scale)))
+            t_scale = min(
+                t_det_size[0] / (ty2 - ty1),
+                t_det_size[1] / W
+            )
+            t_resized = cv2.resize(
+                tile,
+                (int(W * t_scale), int((ty2 - ty1) * t_scale))
+            )
 
             tile_dets = _detect_on_patch(
-                app, t_resized, t_det_size, min_score,
-                offset_x=0, offset_y=ty1, scale=t_scale
+                app,
+                t_resized,
+                t_det_size,
+                min_score,
+                offset_x=0,
+                offset_y=ty1,
+                scale=t_scale
             )
+
             all_dets.extend(tile_dets)
-            logger.debug(f"Pass 3 tile {t}: {len(tile_dets)} raw faces")
+
+            logger.debug(
+                f"Pass 3 tile {t}: {len(tile_dets)} raw faces"
+            )
 
     final = _nms(all_dets)
-    logger.info(f"After NMS: {len(final)} faces (from {len(all_dets)} raw detections)")
+
+    logger.info(
+        f"After NMS: {len(final)} faces "
+        f"(from {len(all_dets)} raw detections)"
+    )
+
     return final
 
 
